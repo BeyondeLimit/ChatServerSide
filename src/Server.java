@@ -25,7 +25,6 @@ public class Server implements Runnable{
 
     private PrivateKey privateKey;
     private static PublicKey pubKey;
-    private boolean needKeyPair = true;
 
     private final int MAX_ATTEMPTS = 5;
     public Server(int port){
@@ -44,6 +43,11 @@ public class Server implements Runnable{
             System.out.println("Server started on port " + port);
             manageClient();
             recieveData();
+            try {
+                crypto();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
         private void manageClient(){
@@ -142,24 +146,20 @@ public class Server implements Runnable{
                 clients.add(new ServerClient(line.substring(3,line.length()),packet.getAddress(),packet.getPort(),id));
                 String ID = "/c/" + id;
                 send(ID,packet.getAddress(),packet.getPort());
-                if(needKeyPair) {
-                    crypto();
-                    needKeyPair = false;
-                }
+
                 System.out.println(pubKey);
-                String first  = Base64.getEncoder().encodeToString(pubKey.getEncoded());
-                System.out.println(first);
-                byte[] second = Base64.getDecoder().decode(first);
-                KeyFactory kf = KeyFactory.getInstance("RSA");
-                PublicKey newPublicKey = kf.generatePublic(new X509EncodedKeySpec(second));
-                System.out.println(newPublicKey);
+//                String first  = Base64.getEncoder().encodeToString(pubKey.getEncoded());
+//                byte[] second = Base64.getDecoder().decode(first);
+//                KeyFactory kf = KeyFactory.getInstance("RSA");
+//                PublicKey newPublicKey = kf.generatePublic(new X509EncodedKeySpec(second));
                 String given = "/k/" + Base64.getEncoder().encodeToString(pubKey.getEncoded());
-                System.out.println(given);
-                send(given.getBytes(),packet.getAddress(),packet.getPort());
+                System.out.println(given.length());
+                send(given.trim().getBytes(),packet.getAddress(),packet.getPort());
             }else {
-                byte[] decMess = line.getBytes();
-                decMess = decrypt(privateKey,decMess);
-                line = decMess.toString();
+                byte[] decMess = line.trim().getBytes();
+                byte[] derepted = decrypt(privateKey,decMess);
+                //line = Base64.getDecoder().decode(derepted);
+
                 if (line.startsWith("/n/")) {
                     sendToAll(line, true);
                 } else if (line.startsWith("/d/")) {
@@ -196,7 +196,7 @@ public class Server implements Runnable{
         }
 
         public static byte[] decrypt(PrivateKey privateKey,byte[]message)throws Exception{
-            Cipher cipher = Cipher.getInstance("RSA");
+            Cipher cipher = Cipher.getInstance("RSA/ECB/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE,privateKey);
             return cipher.doFinal(message);
         }
