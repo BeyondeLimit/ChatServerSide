@@ -1,10 +1,16 @@
+import javax.crypto.Cipher;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.security.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Base64;
 
 public class Server implements Runnable{
 
@@ -17,7 +23,11 @@ public class Server implements Runnable{
     private Thread thrdRun,thrdManage,thrdSend,thrdRecieve;
     private boolean running;
 
-    //private final int MAX_ATTEMPTS = 5;
+    private PrivateKey privateKey;
+    private static PublicKey pubKey;
+    private boolean needKeyPair = true;
+
+    private final int MAX_ATTEMPTS = 5;
     public Server(int port){
         this.port = port;
         try {
@@ -41,7 +51,7 @@ public class Server implements Runnable{
                 public void run(){
                     while(running){     //Managing
                     //System.out.println(clients.size()); // check current clients amount
-                       sendToAll("/a/ping");
+//                       sendToAll("/a/ping");
 //                        try {
 //                            thrdManage.sleep(3000);
 //                        } catch (InterruptedException e) {
@@ -80,18 +90,29 @@ public class Server implements Runnable{
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
-                        process(packet);
-
+                        try {
+                            process(packet);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                         //System.out.println(clients.get(0).address.toString() + " : " + clients.get(0).port);
                     }
                 }
             };
             thrdRecieve.start();
         }
-        private void sendToAll(String message){
-            for (int i = 0;i < clients.size();i++){
-                ServerClient client = clients.get(i);
-                send(message.getBytes(),client.address,client.port);
+        private void sendToAll(String message,boolean needed) throws Exception {
+            if(needed) {
+                byte[] decryptedMessage = decrypt(privateKey, message.getBytes());
+                for (int i = 0; i < clients.size(); i++) {
+                    ServerClient client = clients.get(i);
+                    send(decryptedMessage, client.address, client.port);
+                }
+            }else{
+                for (int i = 0; i < clients.size(); i++) {
+                    ServerClient client = clients.get(i);
+                    send(message.getBytes(), client.address, client.port);
+                }
             }
         }
         private void send (final byte[] data, final InetAddress address, final int port){
@@ -112,7 +133,7 @@ public class Server implements Runnable{
             message += "/e/";
             send(message.getBytes(),adress,port);
         }
-        private void process (DatagramPacket packet){
+        private void process (DatagramPacket packet) throws Exception{
             String line = new String(packet.getData());
             if(line.startsWith("/c/")){
                 //UUID id = UUID.randomUUID();
@@ -121,15 +142,34 @@ public class Server implements Runnable{
                 clients.add(new ServerClient(line.substring(3,line.length()),packet.getAddress(),packet.getPort(),id));
                 String ID = "/c/" + id;
                 send(ID,packet.getAddress(),packet.getPort());
-            }else if(line.startsWith("/n/")){
-                sendToAll(line);
-            }else if(line.startsWith("/d/")) {
-                String id = line.split("/d/|/e/")[1];
-                disconnect(Integer.parseInt(id),true);
-            }else if(line.startsWith("/a/")){
-                clientResp.add(Integer.parseInt(line.split("/a/|/e/")[1]));
-            }else{
-                System.out.println(line);
+                if(needKeyPair) {
+                    crypto();
+                    needKeyPair = false;
+                }
+                System.out.println(pubKey);
+                String first  = Base64.getEncoder().encodeToString(pubKey.getEncoded());
+                System.out.println(first);
+                byte[] second = Base64.getDecoder().decode(first);
+                KeyFactory kf = KeyFactory.getInstance("RSA");
+                PublicKey newPublicKey = kf.generatePublic(new X509EncodedKeySpec(second));
+                System.out.println(newPublicKey);
+                String given = "/k/" + Base64.getEncoder().encodeToString(pubKey.getEncoded());
+                System.out.println(given);
+                send(given.getBytes(),packet.getAddress(),packet.getPort());
+            }else {
+                byte[] decMess = line.getBytes();
+                decMess = decrypt(privateKey,decMess);
+                line = decMess.toString();
+                if (line.startsWith("/n/")) {
+                    sendToAll(line, true);
+                } else if (line.startsWith("/d/")) {
+                    String id = line.split("/d/|/e/")[1];
+                    disconnect(Integer.parseInt(id), true);
+                } else if (line.startsWith("/a/")) {
+                    clientResp.add(Integer.parseInt(line.split("/a/|/e/")[1]));
+                } else {
+                    System.out.println(line);
+                }
             }
         }
         private void disconnect(int id, boolean status){
@@ -148,5 +188,32 @@ public class Server implements Runnable{
                 mess = "Client : " + cl.name.trim() + " , (" + cl.getID() + ") @ " + cl.address.toString() + " : " + cl.port + " timed out";
             }
             System.out.println(mess);
+            try {
+                sendToAll(mess,false);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
+
+        public static byte[] decrypt(PrivateKey privateKey,byte[]message)throws Exception{
+            Cipher cipher = Cipher.getInstance("RSA");
+            cipher.init(Cipher.DECRYPT_MODE,privateKey);
+            return cipher.doFinal(message);
+        }
+
+
+    public  void crypto()throws Exception{
+        KeyPair keyPair = buildKeyPair();
+        pubKey = keyPair.getPublic();
+        privateKey = keyPair.getPrivate();
+    }
+
+
+    public static KeyPair buildKeyPair() throws NoSuchAlgorithmException {
+
+        final int keySize = 650;
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(keySize);
+        return keyPairGenerator.genKeyPair();
+    }
 }
