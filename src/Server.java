@@ -12,6 +12,8 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Base64;
 
+import static jdk.nashorn.internal.objects.NativeString.substring;
+
 public class Server implements Runnable{
 
     private List<ServerClient> clients = new ArrayList<ServerClient>();
@@ -105,18 +107,10 @@ public class Server implements Runnable{
             };
             thrdRecieve.start();
         }
-        private void sendToAll(String message,boolean needed) throws Exception {
-            if(needed) {
-                byte[] decryptedMessage = decrypt(privateKey, message.getBytes());
-                for (int i = 0; i < clients.size(); i++) {
-                    ServerClient client = clients.get(i);
-                    send(decryptedMessage, client.address, client.port);
-                }
-            }else{
+        private void sendToAll(String message) {
                 for (int i = 0; i < clients.size(); i++) {
                     ServerClient client = clients.get(i);
                     send(message.getBytes(), client.address, client.port);
-                }
             }
         }
         private void send (final byte[] data, final InetAddress address, final int port){
@@ -146,28 +140,25 @@ public class Server implements Runnable{
                 clients.add(new ServerClient(line.substring(3,line.length()),packet.getAddress(),packet.getPort(),id));
                 String ID = "/c/" + id;
                 send(ID,packet.getAddress(),packet.getPort());
-
-                System.out.println(pubKey);
-//                String first  = Base64.getEncoder().encodeToString(pubKey.getEncoded());
-//                byte[] second = Base64.getDecoder().decode(first);
-//                KeyFactory kf = KeyFactory.getInstance("RSA");
-//                PublicKey newPublicKey = kf.generatePublic(new X509EncodedKeySpec(second));
                 String given = "/k/" + Base64.getEncoder().encodeToString(pubKey.getEncoded());
-                System.out.println(given.length());
                 send(given.trim().getBytes(),packet.getAddress(),packet.getPort());
+            }else if (line.startsWith("/d/")) {
+                String id = line.split("/d/|/e/")[1];
+                disconnect(Integer.parseInt(id), true);
+            } else if (line.startsWith("/a/")) {
+                clientResp.add(Integer.parseInt(line.split("/a/|/e/")[1]));
             }else {
-                byte[] decMess = line.trim().getBytes();
+                String tempProtoc = substring(line,0,3);
+                System.out.println(tempProtoc);
+                line = line.substring(3);
+                line = line.trim();
+                byte[] decMess = Base64.getDecoder().decode(line);
                 byte[] derepted = decrypt(privateKey,decMess);
-                //line = Base64.getDecoder().decode(derepted);
-
-                if (line.startsWith("/n/")) {
-                    sendToAll(line, true);
-                } else if (line.startsWith("/d/")) {
-                    String id = line.split("/d/|/e/")[1];
-                    disconnect(Integer.parseInt(id), true);
-                } else if (line.startsWith("/a/")) {
-                    clientResp.add(Integer.parseInt(line.split("/a/|/e/")[1]));
-                } else {
+                String decTry = new String(derepted);
+                if (tempProtoc.startsWith("/n/")) {
+                    decTry = "/n/" + decTry;
+                    sendToAll(decTry);
+                }  else {
                     System.out.println(line);
                 }
             }
@@ -189,14 +180,14 @@ public class Server implements Runnable{
             }
             System.out.println(mess);
             try {
-                sendToAll(mess,false);
+                sendToAll(mess);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
 
         public static byte[] decrypt(PrivateKey privateKey,byte[]message)throws Exception{
-            Cipher cipher = Cipher.getInstance("RSA/ECB/NoPadding");
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
             cipher.init(Cipher.DECRYPT_MODE,privateKey);
             return cipher.doFinal(message);
         }
