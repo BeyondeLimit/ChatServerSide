@@ -57,25 +57,25 @@ public class Server implements Runnable{
                 public void run(){
                     while(running){     //Managing
                     //System.out.println(clients.size()); // check current clients amount
-//                       sendToAll("/a/ping");
-//                        try {
-//                            thrdManage.sleep(3000);
-//                        } catch (InterruptedException e) {
-//                            e.printStackTrace();
-//                        }
-//                        for(int i = 0;i <clients.size();i++){
-//                           ServerClient sc = clients.get(i);
-//                           if(!clientResp.contains(sc.getID())){
-//                                if(sc.attempt >= MAX_ATTEMPTS){
-//                                    disconnect(sc.getID(),false);
-//                                }else{
-//                                    sc.attempt++;
-//                                }
-//                           }else{
-//                               clientResp.remove(new Integer(sc.getID()));
-//                               sc.attempt = 0;
-//                           }
-//                       }
+                       sendToAll("/a/ping");
+                        try {
+                            thrdManage.sleep(3000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        for(int i = 0;i <clients.size();i++){
+                           ServerClient sc = clients.get(i);
+                           if(!clientResp.contains(sc.getID())){
+                                if(sc.attempt >= MAX_ATTEMPTS){
+                                    disconnect(sc.getID(),false);
+                                }else{
+                                    sc.attempt++;
+                                }
+                           }else{
+                               clientResp.remove(new Integer(sc.getID()));
+                               sc.attempt = 0;
+                           }
+                       }
 
                     }
                 }
@@ -149,7 +149,7 @@ public class Server implements Runnable{
                 clientResp.add(Integer.parseInt(line.split("/a/|/e/")[1]));
             }else {
                 String tempProtoc = substring(line,0,3);
-                System.out.println(tempProtoc);
+                //System.out.println(tempProtoc);
                 line = line.substring(3);
                 line = line.trim();
                 byte[] decMess = Base64.getDecoder().decode(line);
