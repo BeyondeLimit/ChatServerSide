@@ -5,12 +5,11 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.security.*;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.Base64;
+import java.sql.*;
+import java.util.Properties;
 
 import static jdk.nashorn.internal.objects.NativeString.substring;
 
@@ -43,6 +42,7 @@ public class Server implements Runnable{
         public void run(){
             running = true;
             System.out.println("Server started on port " + port);
+            dBinfo();
             manageClient();
             recieveData();
             try {
@@ -206,5 +206,21 @@ public class Server implements Runnable{
         KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
         keyPairGenerator.initialize(keySize);
         return keyPairGenerator.genKeyPair();
+    }
+
+    public void dBinfo(){
+        try {
+            Class.forName("org.postgresql.Driver");
+            String url = "jdbc:postgresql://localhost:3307/chatDB";
+            Connection conn = DriverManager.getConnection(url, "postgres","Agruikwjdxa1234");
+            Statement stm = conn.createStatement();
+            ResultSet res = stm.executeQuery("select * from messages");
+            while(res.next()) {
+                System.out.println(res.getInt(1) + res.getString(2) + res.getString(3));
+            }
+            conn.close();
+        }catch(Exception e){
+            e.printStackTrace();
+        }
     }
 }
