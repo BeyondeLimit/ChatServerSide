@@ -1,3 +1,5 @@
+import org.postgresql.util.PSQLException;
+
 import javax.crypto.Cipher;
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -42,7 +44,6 @@ public class Server implements Runnable{
         public void run(){
             running = true;
             System.out.println("Server started on port " + port);
-            dBinfo();
             manageClient();
             recieveData();
             try {
@@ -142,6 +143,7 @@ public class Server implements Runnable{
                 send(ID,packet.getAddress(),packet.getPort());
                 String given = "/k/" + Base64.getEncoder().encodeToString(pubKey.getEncoded());
                 send(given.trim().getBytes(),packet.getAddress(),packet.getPort());
+                dBinfo(packet);
             }else if (line.startsWith("/d/")) {
                 String id = line.split("/d/|/e/")[1];
                 disconnect(Integer.parseInt(id), true);
@@ -156,6 +158,7 @@ public class Server implements Runnable{
                 byte[] derepted = decrypt(privateKey,decMess);
                 String decTry = new String(derepted);
                 if (tempProtoc.startsWith("/n/")) {
+                    updateDB(decTry);
                     decTry = "/n/" + decTry;
                     sendToAll(decTry);
                 }  else {
@@ -208,18 +211,46 @@ public class Server implements Runnable{
         return keyPairGenerator.genKeyPair();
     }
 
-    public void dBinfo(){
+    public void dBinfo(DatagramPacket packet){
         try {
             Class.forName("org.postgresql.Driver");
             String url = "jdbc:postgresql://localhost:3307/chatDB";
             Connection conn = DriverManager.getConnection(url, "postgres","Agruikwjdxa1234");
             Statement stm = conn.createStatement();
-            ResultSet res = stm.executeQuery("select * from messages");
+            ResultSet res = stm.executeQuery("SELECT * FROM messages ");
+            String message;
             while(res.next()) {
-                System.out.println(res.getInt(1) + res.getString(2) + res.getString(3));
+                message ="/n/" + res.getString(1) + " : " + res.getString(2);
+                send(message,packet.getAddress(),packet.getPort());
             }
+            res.close();
             conn.close();
         }catch(Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    public void updateDB(String dbMessage){
+        try {
+            String name = dbMessage.split(":")[0];
+            name = name.trim();
+            String message = dbMessage.split(":")[1];
+            message = message.trim();
+            Class.forName("org.postgresql.Driver");
+            String url = "jdbc:postgresql://localhost:3307/chatDB";
+            Connection conn = DriverManager.getConnection(url, "postgres", "Agruikwjdxa1234");
+            String SQL = "INSERT INTO public.messages (name, message) VALUES (?,?)";
+            PreparedStatement pstm = conn.prepareStatement(SQL);
+            pstm.setString(1,name);
+            pstm.setString(2,message);
+            pstm.executeQuery();
+            pstm.close();
+            conn.close();
+        }catch(PSQLException e){
+            System.out.println("PSQL exeption");
+        }catch(SQLException e){
+            e.printStackTrace();
+        }catch (ClassNotFoundException e){
             e.printStackTrace();
         }
     }
